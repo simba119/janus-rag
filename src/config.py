@@ -19,7 +19,7 @@ class Config:
     OPENCLI_BINARY = os.getenv("OPENCLI_BINARY", "opencli")
     
     # ========== 模型配置（可切换测试用模型） ==========
-    TEXT_GEN_MODEL = os.getenv("TEXT_GEN_MODEL", "gpt2")  # 测试用小模型，正式用 Qwen/Qwen2.5-1.5B-Instruct
+    TEXT_GEN_MODEL = os.getenv("TEXT_GEN_MODEL", "Qwen/Qwen2.5-1.5B-Instruct")
     VIMRAG_DEVICE = os.getenv("VIMRAG_DEVICE", "cpu")
     
     # ========== 路由与超时 ==========

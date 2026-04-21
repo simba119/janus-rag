@@ -1,9 +1,17 @@
+# 核心 Web 框架 - 锁定在我们测试过最稳定的版本
 gradio==4.44.1
-fastapi>=0.100.0
+# Pydantic 锁定，解决 "argument of type 'bool' is not iterable" 错误
+pydantic==2.10.6
+
+# 模型与推理
 transformers==4.46.0
 torch==2.5.0
 accelerate==0.34.2
+
+# 异步与网络请求
 aiohttp==3.10.5
+requests==2.32.3
+
+# 工具库
 python-dotenv==1.0.1
 Pillow==10.4.0
-requests==2.32.3

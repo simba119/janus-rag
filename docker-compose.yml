@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  janus-rag:
+    build: .
+    ports:
+      - "7860:7860"
+    environment:
+      - SEARCH_ADAPTER=${SEARCH_ADAPTER:-bocha}
+      - BOCHA_API_KEY=${BOCHA_API_KEY}
+      - VIMRAG_DEVICE=${VIMRAG_DEVICE:-cpu}
+      - TEXT_GEN_MODEL=${TEXT_GEN_MODEL:-Qwen/Qwen2.5-1.5B-Instruct}
+    volumes:
+      - ./models:/root/.cache/huggingface
+      - ./llm_wiki_data:/app/llm_wiki_data
+      - ./demo:/app/demo

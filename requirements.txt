@@ -1,0 +1,9 @@
+gradio==4.44.1
+starlette>=0.40.0
+transformers==4.46.0
+torch==2.5.0
+accelerate==0.34.2
+aiohttp==3.10.5
+python-dotenv==1.0.1
+Pillow==10.4.0
+requests==2.32.3

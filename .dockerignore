@@ -1,0 +1,16 @@
+.env
+.env.*
+__pycache__/
+*.pyc
+models/
+llm_wiki_data/
+.git/
+.gitignore
+README.md
+LICENSE
+Dockerfile
+docker-compose.yml
+.venv/
+venv/
+*.log
+.DS_Store

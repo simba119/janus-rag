@@ -9,14 +9,23 @@ from typing import Dict, List
 
 def extract_facts(text: str) -> List[str]:
     facts = []
+    # 数字 + 常见单位
     patterns = [
-        r'\d+(?:\.\d+)?\s*(?:亿|万|%|美元|元|人|次|°C|秒|分|圈)',
+        r'\d+(?:\.\d+)?\s*(?:亿|万|%|美元|元|人|次|°C|秒|分|圈|公里|米|千克|岁)',
         r'\d{4}年\d{1,2}月\d{1,2}日',
-        r'[1-9]\d{0,2}\s*(?:岁|公里|米|千克)',
     ]
     for pattern in patterns:
         matches = re.findall(pattern, text)
         facts.extend(matches)
+    
+    # 简单提取中文专有名词（连续两个以上中文字符，且包含常见后缀）
+    # 如：维斯塔潘、上海国际赛车场、红牛车队
+    proper_nouns = re.findall(r'[A-Z][a-z]+(?:[-\s][A-Z][a-z]+)*|[\u4e00-\u9fff]{2,}(?:车队|公司|集团|大学|学院|医院|中心|组织|协会|委员会|大奖赛|赛车场)?', text)
+    # 去重并过滤过短的结果
+    for noun in set(proper_nouns):
+        if len(noun) >= 3 and not noun.isdigit():
+            facts.append(noun)
+    
     return facts
 
 

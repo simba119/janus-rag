@@ -3,40 +3,31 @@
 
 核心创新：
     在模型生成第一个 token 的同时，后台线程发起搜索。
-    当生成到一定长度时，将已返回的搜索结果注入上下文，实现“边搜边想”。
-    用户感知延迟大幅降低。
+    使用真实的 TextIteratorStreamer 实现 token 级流式输出。
 """
 
 import threading
-import time
 from typing import Generator, List, Dict, Optional
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, TextIteratorStreamer
 import torch
 from config import config
 
 
 class SpeculativeGenerator:
-    def __init__(self, model_name: str = None):
-        import traceback
-        try:
-            model_name = model_name or config.TEXT_GEN_MODEL
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
-            print(f"[SpeculativeGen] 开始加载模型: {model_name}")
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-            self.model = AutoModelForCausalLM.from_pretrained(
-                model_name,
-                torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
-                device_map="auto" if self.device == "cuda" else None,
-                trust_remote_code=True
-            )
-            if self.device == "cpu":
-                self.model = self.model.to("cpu")
-            self.search_adapter = None
-            print(f"[SpeculativeGen] 模型加载成功")
-        except Exception as e:
-            print("\n❌ [SpeculativeGen] 模型加载失败，错误详情：")
-            traceback.print_exc()
-            raise e
+    def __init__(self, model_name: str = None, search_adapter=None):
+        model_name = model_name or config.TEXT_GEN_MODEL
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
+            device_map="auto" if self.device == "cuda" else None,
+            trust_remote_code=True
+        )
+        if self.device == "cpu":
+            self.model = self.model.to("cpu")
+        # ✅ 允许外部注入搜索适配器
+        self.search_adapter = search_adapter
         
     def _background_search(self, query: str, result_holder: List):
         if self.search_adapter:
@@ -50,6 +41,7 @@ class SpeculativeGenerator:
         search_result_holder = []
         search_thread = None
         
+        # 如果需要搜索，启动后台线程
         if search_query and self.search_adapter:
             search_thread = threading.Thread(
                 target=self._background_search, 
@@ -58,27 +50,35 @@ class SpeculativeGenerator:
             search_thread.start()
             yield "[🔍 后台搜索已启动...]\n\n"
         
+        # ✅ 使用 TextIteratorStreamer 实现真实流式输出
         inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
-        with torch.no_grad():
-            outputs = self.model.generate(
-                **inputs,
-                max_new_tokens=300,
-                do_sample=False,
-                temperature=0.1,
-                pad_token_id=self.tokenizer.eos_token_id
-            )
-        generated_ids = outputs[0][len(inputs.input_ids[0]):]
-        generated_text = self.tokenizer.decode(generated_ids, skip_special_tokens=True)
+        streamer = TextIteratorStreamer(self.tokenizer, skip_prompt=True, skip_special_tokens=True)
         
-        for i, char in enumerate(generated_text):
-            yield char
-            time.sleep(0.01)
-            if search_thread and search_thread.is_alive() and i == 20:
-                search_thread.join(timeout=0.5)
+        generate_kwargs = {
+            **inputs,
+            "max_new_tokens": 300,
+            "do_sample": False,
+            "temperature": 0.1,
+            "pad_token_id": self.tokenizer.eos_token_id,
+            "streamer": streamer,
+        }
         
+        # 在独立线程中运行 generate，避免阻塞主线程
+        generate_thread = threading.Thread(target=self.model.generate, kwargs=generate_kwargs)
+        generate_thread.start()
+        
+        # 主线程逐 token 输出
+        for token_text in streamer:
+            yield token_text
+        
+        # 等待生成线程结束
+        generate_thread.join()
+        
+        # 等待搜索线程结束
         if search_thread:
             search_thread.join(timeout=2.0)
         
+        # 如果有搜索结果，追加显示
         if search_result_holder:
             yield "\n\n---\n**📡 实时搜索结果摘要**\n"
             for idx, item in enumerate(search_result_holder[:3], 1):

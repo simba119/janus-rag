@@ -25,8 +25,7 @@ search_adapter = get_search_adapter()
 print(f"[Janus] 适配器可用性: {search_adapter.is_available()}")
 
 print(f"[Janus] 加载文本模型: {config.TEXT_GEN_MODEL}")
-text_generator = SpeculativeGenerator()
-text_generator.search_adapter = search_adapter
+text_generator = SpeculativeGenerator(search_adapter=search_adapter)
 
 vimrag = None
 try:

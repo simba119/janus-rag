@@ -6,11 +6,10 @@ services:
     ports:
       - "7860:7860"
     environment:
-      - SEARCH_ADAPTER=${SEARCH_ADAPTER:-bocha}
+      - SEARCH_ADAPTER=${SEARCH_ADAPTER:-static}
       - BOCHA_API_KEY=${BOCHA_API_KEY}
-      - VIMRAG_DEVICE=${VIMRAG_DEVICE:-cpu}
       - TEXT_GEN_MODEL=${TEXT_GEN_MODEL:-Qwen/Qwen2.5-1.5B-Instruct}
+      - HF_ENDPOINT=https://hf-mirror.com
     volumes:
       - ./models:/root/.cache/huggingface
       - ./llm_wiki_data:/app/llm_wiki_data
-      - ./demo:/app/demo

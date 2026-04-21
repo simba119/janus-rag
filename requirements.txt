@@ -1,5 +1,5 @@
 gradio==4.44.1
-starlette>=0.40.0
+fastapi>=0.100.0
 transformers==4.46.0
 torch==2.5.0
 accelerate==0.34.2

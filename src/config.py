@@ -10,22 +10,16 @@ load_dotenv()
 
 class Config:
     # ========== 核心：可插拔搜索适配器 ==========
-    # 默认 static（离线演示，开箱即用，无需配置任何 API key）
-    # 如需启用博查搜索，请配置 BOCHA_API_KEY 后将 SEARCH_ADAPTER 改为 bocha
-    SEARCH_ADAPTER = os.getenv("SEARCH_ADAPTER", "static")
+    SEARCH_ADAPTER = os.getenv("SEARCH_ADAPTER", "bocha")
     
-    # ========== 博查 API ==========
+    # ========== 博查 Web Search API ==========
     BOCHA_API_KEY = os.getenv("BOCHA_API_KEY", "")
     
     # ========== OpenCLI 配置 ==========
     OPENCLI_BINARY = os.getenv("OPENCLI_BINARY", "opencli")
     
-    # ========== Agent-Reach 配置 ==========
-    AGENT_REACH_ENDPOINT = os.getenv("AGENT_REACH_ENDPOINT", "http://localhost:3000")
-    
-    # ========== 模型配置 ==========
-    TEXT_GEN_MODEL = os.getenv("TEXT_GEN_MODEL", "Qwen/Qwen2.5-1.5B-Instruct")
-    VIMRAG_MODEL_NAME = os.getenv("VIMRAG_MODEL_NAME", "Qwen/Qwen2-VL-7B-Instruct")
+    # ========== 模型配置（可切换测试用模型） ==========
+    TEXT_GEN_MODEL = os.getenv("TEXT_GEN_MODEL", "gpt2")  # 测试用小模型，正式用 Qwen/Qwen2.5-1.5B-Instruct
     VIMRAG_DEVICE = os.getenv("VIMRAG_DEVICE", "cpu")
     
     # ========== 路由与超时 ==========

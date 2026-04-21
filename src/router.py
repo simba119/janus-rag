@@ -1,9 +1,5 @@
 """
 智能路由模块 (Intelligent Router)
-
-功能：
-    1. 判断查询是否需要联网搜索（基于零样本分类）
-    2. 判断是否为多模态查询（图片/视频/文档）
 """
 
 from transformers import pipeline
@@ -12,6 +8,7 @@ from config import config
 
 class SmartRouter:
     def __init__(self):
+        # 使用轻量级模型，仅约25MB，符合低成本定位
         self.classifier = pipeline(
             "zero-shot-classification",
             model="MoritzLaurer/xtremedistil-l6-h256-zeroshot-v1.1-all-33",

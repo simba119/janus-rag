@@ -6,9 +6,8 @@
     即可将自己的数据源无缝接入 Janus-RAG。
 
 内置适配器：
-    - BochaAdapter      : 博查 AI 搜索 API（默认，国内合规，免费额度）
+    - BochaAdapter      : 博查 Web Search API（默认，国内合规，免费额度）
     - OpenCLIAdapter    : 复用浏览器登录态，零成本抓取国内主流平台
-    - AgentReachAdapter : 基于 MCP 协议的跨平台 Agent 搜索
     - StaticOfflineAdapter : 离线演示/测试用，从本地 JSON 读取
 
 自定义适配器：
@@ -52,11 +51,12 @@ class BaseSearchAdapter(ABC):
 
 
 # ============================================================================
-# 适配器 0: 博查 AI 搜索 API (默认推荐)
+# 适配器 0: 博查 Web Search API (默认推荐)
+# 正确端点为 /v1/web-search，非 /v1/ai-search
 # ============================================================================
 
 class BochaAdapter(BaseSearchAdapter):
-    """使用博查 AI 搜索 API。
+    """使用博查 Web Search API。
     
     获取 API Key:
         1. 访问 https://open.bochaai.com 注册
@@ -77,13 +77,13 @@ class BochaAdapter(BaseSearchAdapter):
             else:
                 try:
                     import requests
-                    resp = requests.post(
-                        self.base_url,
-                        json={"query": "test", "count": 1},
-                        headers={"Authorization": f"Bearer {self.api_key}"},
-                        timeout=5
-                    )
-                    self._available = resp.status_code == 200
+                    payload = {"query": "test", "count": 1}
+                    headers = {
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json"
+                    }
+                    resp = requests.post(self.base_url, json=payload, headers=headers, timeout=5)
+                    self._available = (resp.status_code == 200)
                 except:
                     self._available = False
         return self._available
@@ -93,8 +93,15 @@ class BochaAdapter(BaseSearchAdapter):
             return []
         try:
             import requests
-            payload = {"query": query, "count": max_results}
-            headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
+            payload = {
+                "query": query,
+                "count": max_results,
+                "summary": True
+            }
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
             resp = requests.post(self.base_url, json=payload, headers=headers, timeout=10)
             data = resp.json()
             return self._parse_response(data)
@@ -106,7 +113,7 @@ class BochaAdapter(BaseSearchAdapter):
             return []
         try:
             import aiohttp
-            payload = {"query": query, "count": max_results}
+            payload = {"query": query, "count": max_results, "summary": True}
             headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
             async with aiohttp.ClientSession() as session:
                 async with session.post(self.base_url, json=payload, headers=headers, timeout=10) as resp:
@@ -117,14 +124,13 @@ class BochaAdapter(BaseSearchAdapter):
     
     def _parse_response(self, data: dict) -> List[Dict[str, str]]:
         results = []
-        # 博查API实际返回结构: data.webPages.value
-        web_pages = data.get("data", {}).get("webPages", {})
-        items = web_pages.get("value", []) if isinstance(web_pages, dict) else []
-        for item in items:
+        # 正确路径：data.webPages.value
+        web_pages = data.get("data", {}).get("webPages", {}).get("value", [])
+        for item in web_pages:
             results.append({
-                "title": item.get("name", item.get("title", "")),
+                "title": item.get("name", ""),
                 "link": item.get("url", ""),
-                "snippet": item.get("snippet", "")[:500],
+                "snippet": item.get("summary", item.get("snippet", ""))[:500],
                 "source": "Bocha"
             })
         return results
@@ -135,13 +141,7 @@ class BochaAdapter(BaseSearchAdapter):
 # ============================================================================
 
 class OpenCLIAdapter(BaseSearchAdapter):
-    """使用 OpenCLI 命令行工具抓取数据。
-    
-    替换指南：
-        - 修改 __init__ 中的 self.binary 可切换命令路径
-        - 修改 platforms 列表可调整搜索的网站
-        - 重写 _parse_output 可适配不同输出格式
-    """
+    """使用 OpenCLI 命令行工具抓取数据。"""
     
     def __init__(self, binary_path: str = None):
         from config import config
@@ -194,72 +194,7 @@ class OpenCLIAdapter(BaseSearchAdapter):
 
 
 # ============================================================================
-# 适配器 2: Agent-Reach
-# ============================================================================
-
-class AgentReachAdapter(BaseSearchAdapter):
-    """Agent-Reach 适配器（预留接口，MCP 协议搜索后端）。
-
-    当前状态：预留接口，尚未接入外部 Agent-Reach 服务。
-    如需启用，请部署 Agent-Reach 服务并配置 AGENT_REACH_ENDPOINT。
-    未接入时系统自动降级至其他可用适配器。
-    """
-    
-    def __init__(self, endpoint: str = None):
-        from config import config
-        self.endpoint = endpoint or config.AGENT_REACH_ENDPOINT
-        
-    def is_available(self) -> bool:
-        try:
-            import requests
-            resp = requests.get(f"{self.endpoint}/health", timeout=2)
-            return resp.status_code == 200
-        except:
-            return False
-    
-    def search_sync(self, query: str, max_results: int = 5) -> List[Dict[str, str]]:
-        if not self.is_available():
-            return []
-        try:
-            import requests
-            resp = requests.post(
-                f"{self.endpoint}/search",
-                json={"query": query, "max_results": max_results},
-                timeout=10
-            )
-            return self._parse_response(resp.json())
-        except:
-            return []
-    
-    async def search_async(self, query: str, max_results: int = 5) -> List[Dict[str, str]]:
-        if not self.is_available():
-            return []
-        try:
-            import aiohttp
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{self.endpoint}/search",
-                    json={"query": query, "max_results": max_results},
-                    timeout=10
-                ) as resp:
-                    return self._parse_response(await resp.json())
-        except:
-            return []
-    
-    def _parse_response(self, data: dict) -> List[Dict[str, str]]:
-        results = []
-        for item in data.get("results", []):
-            results.append({
-                "title": item.get("title", ""),
-                "link": item.get("url", ""),
-                "snippet": item.get("snippet", ""),
-                "source": item.get("platform", "Agent-Reach")
-            })
-        return results
-
-
-# ============================================================================
-# 适配器 3: 静态离线适配器
+# 适配器 2: 静态离线适配器（修复匹配逻辑）
 # ============================================================================
 
 class StaticOfflineAdapter(BaseSearchAdapter):
@@ -285,9 +220,9 @@ class StaticOfflineAdapter(BaseSearchAdapter):
         cache = self._load_cache()
         # 1. 精确关键词匹配（跳过元数据字段）
         for key, results in cache.items():
-            if key.startswith("_"):  # 跳过元数据字段
+            if key.startswith("_"):
                 continue
-            if key != "default" and key.lower() in query.lower():
+            if key.lower() in query.lower():
                 return results[:max_results]
         # 2. 无匹配时返回 default 兜底数据
         return cache.get("default", [])[:max_results]
@@ -310,8 +245,6 @@ def get_search_adapter() -> BaseSearchAdapter:
         return BochaAdapter()
     elif adapter_name == "opencli":
         return OpenCLIAdapter()
-    elif adapter_name == "agent_reach":
-        return AgentReachAdapter()
     elif adapter_name == "static":
         return StaticOfflineAdapter()
     else:

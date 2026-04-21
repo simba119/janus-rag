@@ -1,28 +1,12 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-venv/
-ENV/
-.venv/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Local configs
 .env
-*.local
-
-# Build
-dist/
-build/
-*.egg-info/
+__pycache__/
+*.pyc
+models/
+*.log
+.DS_Store
+.vscode/
+*.swp
+demo_uploads/
+llm_wiki_data/
+venv/
+.venv/

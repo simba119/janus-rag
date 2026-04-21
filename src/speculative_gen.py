@@ -3,7 +3,7 @@
 
 核心创新：
     在模型生成第一个 token 的同时，后台线程发起搜索。
-    当生成到一定长度时，将已返回的搜索结果注入上下文，实现"边搜边想"。
+    当生成到一定长度时，将已返回的搜索结果注入上下文，实现“边搜边想”。
     用户感知延迟大幅降低。
 """
 
@@ -17,18 +17,26 @@ from config import config
 
 class SpeculativeGenerator:
     def __init__(self, model_name: str = None):
-        model_name = model_name or config.TEXT_GEN_MODEL
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-        self.model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
-            device_map="auto" if self.device == "cuda" else None,
-            trust_remote_code=True
-        )
-        if self.device == "cpu":
-            self.model = self.model.to("cpu")
-        self.search_adapter = None
+        import traceback
+        try:
+            model_name = model_name or config.TEXT_GEN_MODEL
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            print(f"[SpeculativeGen] 开始加载模型: {model_name}")
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+            self.model = AutoModelForCausalLM.from_pretrained(
+                model_name,
+                torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
+                device_map="auto" if self.device == "cuda" else None,
+                trust_remote_code=True
+            )
+            if self.device == "cpu":
+                self.model = self.model.to("cpu")
+            self.search_adapter = None
+            print(f"[SpeculativeGen] 模型加载成功")
+        except Exception as e:
+            print("\n❌ [SpeculativeGen] 模型加载失败，错误详情：")
+            traceback.print_exc()
+            raise e
         
     def _background_search(self, query: str, result_holder: List):
         if self.search_adapter:

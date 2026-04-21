@@ -1,12 +1,13 @@
 """
 Janus-RAG v3 主入口
 - Gradio Web 界面
-- 智能路由：纯文本走投机生成 + 搜索，多模态走 VimRAG
+- 智能路由：纯文本走投机生成 + 搜索，多模态走 VimRAG（已禁用）
 - 可插拔搜索适配器
 """
 
 import os
 os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
+os.environ['HUGGINGFACE_HUB_CACHE'] = os.path.join(os.path.expanduser('~'), '.cache', 'huggingface', 'hub')
 
 import gradio as gr
 from typing import List
@@ -21,10 +22,7 @@ from llm_wiki import llm_wiki
 
 print(f"[Janus] 加载搜索适配器: {config.SEARCH_ADAPTER}")
 search_adapter = get_search_adapter()
-adapter_available = search_adapter.is_available()
-print(f"[Janus] 适配器可用性: {adapter_available}")
-if config.SEARCH_ADAPTER == "agent_reach" and not adapter_available:
-    print("[Janus] AgentReach 为预留接口，未接入 Agent-Reach 服务，将使用其他适配器")
+print(f"[Janus] 适配器可用性: {search_adapter.is_available()}")
 
 print(f"[Janus] 加载文本模型: {config.TEXT_GEN_MODEL}")
 text_generator = SpeculativeGenerator()
@@ -35,7 +33,7 @@ try:
     from vimrag_adapter import VimRAGAdapter
     vimrag = VimRAGAdapter()
     if vimrag.is_available():
-        print(f"[Janus] VimRAG 已加载: {config.VIMRAG_MODEL_NAME}")
+        print(f"[Janus] VimRAG 已加载")
     else:
         print("[Janus] VimRAG 未加载，多模态功能将降级")
         vimrag = None
@@ -62,7 +60,6 @@ def process_query(query: str, files: List[str]):
                 yield chunk
         else:
             yield "⚠️ VimRAG 模型未加载。请检查配置，或尝试纯文本问题。\n"
-            yield "（提示：将 `.env` 中的 `VIMRAG_DEVICE` 设为 `cpu` 可在无 GPU 环境下运行）"
         return
     
     cached = llm_wiki.get(query)
@@ -108,11 +105,10 @@ with gr.Blocks(title="Janus-RAG v3 - WASC 2026.04") as demo:
     ### 世界AI技能锦标赛 2026年4月 · 低成本高精度搜索
     
     **核心能力**：
-    - 🔌 **可插拔搜索适配器** - 支持 Bocha / OpenCLI / Agent-Reach / 自定义数据源
+    - 🔌 **可插拔搜索适配器** - 支持 Bocha / OpenCLI / 自定义数据源
     - ⚡ **投机性并行生成** - 边搜边想，延迟降低 70%
     - ✅ **多源交叉验证** - 幻觉率 < 1%
     - 📚 **LLM Wiki 本地缓存** - 零 Token 重复查询成本
-    - 🖼️ **VimRAG 多模态支持** - 图像/文档智能路由
     """)
     
     with gr.Row():
@@ -123,7 +119,8 @@ with gr.Blocks(title="Janus-RAG v3 - WASC 2026.04") as demo:
                 lines=2
             )
             file_input = gr.File(
-                label="上传图片/文档 (可选)",
+                label="上传图片/文档 (可选，多模态功能当前已禁用)",
+                file_count="multiple",
                 file_types=["image", ".pdf", ".txt"]
             )
             submit_btn = gr.Button("🔍 提问", variant="primary")
@@ -144,9 +141,9 @@ with gr.Blocks(title="Janus-RAG v3 - WASC 2026.04") as demo:
     
     gr.Markdown("""
     ---
-    **技术架构** | 投机生成 · 可插拔适配器 · 交叉验证 · LLM Wiki · VimRAG
+    **技术架构** | 投机生成 · 可插拔适配器 · 交叉验证 · LLM Wiki
     """)
 
 
 if __name__ == "__main__":
-    demo.launch(server_name="0.0.0.0", server_port=7860, share=False)
+    demo.launch(server_name="0.0.0.0", server_port=7860, share=False, allowed_paths=["./"])

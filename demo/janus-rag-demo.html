@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="zh" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Janus-RAG v3 · 演示</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@300..700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --surface-2: #1c2128;
+      --border:    rgba(255,255,255,0.08);
+      --text:      #e6edf3;
+      --text-muted:#8b949e;
+      --text-faint:#484f58;
+      --accent:    #7c6cf0;
+      --accent-dim:rgba(124,108,240,0.15);
+      --accent-glow:rgba(124,108,240,0.25);
+      --green:     #3fb950;
+      --green-dim: rgba(63,185,80,0.12);
+      --yellow:    #d29922;
+      --red:       #f85149;
+      --mono:      'JetBrains Mono', 'Fira Code', monospace;
+      --sans:      'Inter', system-ui, sans-serif;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --radius-xl: 18px;
+      --transition: 160ms cubic-bezier(0.16,1,0.3,1);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { -webkit-font-smoothing: antialiased; }
+
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: clamp(16px, 3vw, 40px) clamp(12px, 2vw, 24px);
+    }
+
+    /* ── Header ── */
+    .header {
+      width: 100%;
+      max-width: 1100px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
+    }
+
+    .logo-row { display: flex; align-items: center; gap: 12px; }
+
+    .logo-svg { flex-shrink: 0; }
+
+    .title-block h1 {
+      font-size: clamp(1.4rem, 2.5vw, 1.9rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      line-height: 1.2;
+    }
+    .title-block h1 span {
+      background: linear-gradient(in oklab 120deg, #a78bfa, #f0abfc);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .title-block .tagline {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+      letter-spacing: 0.01em;
+    }
+
+    .header-badges { display: flex; gap: 8px; flex-wrap: wrap; padding-top: 4px; }
+    .hbadge {
+      font-size: 0.72rem;
+      font-family: var(--mono);
+      padding: 3px 9px;
+      border-radius: 99px;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      background: var(--surface);
+      white-space: nowrap;
+    }
+    .hbadge.online { border-color: rgba(63,185,80,0.3); color: var(--green); background: var(--green-dim); }
+
+    /* ── Main layout ── */
+    .main {
+      width: 100%;
+      max-width: 1100px;
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      gap: 20px;
+    }
+    @media (max-width: 760px) {
+      .main { grid-template-columns: 1fr; }
+    }
+
+    /* ── Panel ── */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: 20px;
+    }
+
+    .panel-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-faint);
+      margin-bottom: 10px;
+    }
+
+    /* ── Textarea ── */
+    .query-wrap { position: relative; }
+    textarea {
+      font-family: var(--sans);
+      font-size: 0.95rem;
+      width: 100%;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      color: var(--text);
+      padding: 13px 16px;
+      resize: vertical;
+      line-height: 1.55;
+      min-height: 88px;
+      transition: border-color var(--transition), box-shadow var(--transition);
+    }
+    textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    /* ── Chips ── */
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+    .chip {
+      font-size: 0.78rem;
+      padding: 5px 11px;
+      border-radius: 99px;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      background: var(--surface-2);
+      cursor: pointer;
+      transition: all var(--transition);
+      white-space: nowrap;
+    }
+    .chip:hover { border-color: var(--accent); color: var(--text); background: var(--accent-dim); }
+
+    /* ── Status bar ── */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 9px 13px;
+      margin: 12px 0;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+    .status-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--text-faint);
+      flex-shrink: 0;
+      transition: background var(--transition);
+    }
+    .status-dot.live { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .status-dot.searching { background: var(--yellow); animation: pulse 1s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+    /* ── Button ── */
+    .btn-primary {
+      font-family: var(--sans);
+      font-size: 0.92rem;
+      font-weight: 600;
+      width: 100%;
+      padding: 13px;
+      border-radius: var(--radius-md);
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      transition: background var(--transition), transform var(--transition), box-shadow var(--transition);
+      letter-spacing: 0.01em;
+    }
+    .btn-primary:hover { background: #6a5ce0; box-shadow: 0 4px 16px var(--accent-glow); }
+    .btn-primary:active { transform: scale(0.98); }
+    .btn-primary:disabled { background: var(--surface-2); color: var(--text-faint); cursor: not-allowed; box-shadow: none; }
+
+    /* ── Architecture pills ── */
+    .arch-pills { display: flex; flex-direction: column; gap: 7px; margin-top: 16px; }
+    .arch-pill {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      padding: 7px 11px;
+      border-radius: var(--radius-sm);
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+    }
+    .arch-pill-dot {
+      width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+    }
+
+    /* ── Output panel ── */
+    .output-panel { display: flex; flex-direction: column; }
+    .output-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .output-title { font-size: 0.8rem; font-weight: 600; color: var(--text-muted); letter-spacing: 0.05em; text-transform: uppercase; }
+    .copy-btn {
+      font-size: 0.72rem;
+      font-family: var(--mono);
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      background: transparent;
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+    .copy-btn:hover { border-color: var(--accent); color: var(--text); }
+
+    /* ── Output box ── */
+    .output-box {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px 22px;
+      font-size: 0.9rem;
+      line-height: 1.7;
+      color: var(--text);
+      min-height: 400px;
+      max-height: 520px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+    .output-box::-webkit-scrollbar { width: 5px; }
+    .output-box::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+    /* ── Output content styles ── */
+    .out-section { margin-bottom: 16px; }
+
+    .out-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 99px;
+      margin-bottom: 10px;
+    }
+    .out-tag.search { background: rgba(124,108,240,0.15); color: #a78bfa; border: 1px solid rgba(124,108,240,0.25); }
+    .out-tag.cached { background: rgba(63,185,80,0.1); color: var(--green); border: 1px solid rgba(63,185,80,0.2); }
+    .out-tag.verified { background: rgba(63,185,80,0.1); color: var(--green); border: 1px solid rgba(63,185,80,0.2); }
+
+    .out-answer { color: var(--text); line-height: 1.75; }
+    .out-answer strong { color: #e2c9ff; font-weight: 600; }
+
+    .out-divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+
+    .source-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 12px 14px;
+      margin-bottom: 8px;
+      font-size: 0.82rem;
+    }
+    .source-card-title { font-weight: 600; color: var(--text); margin-bottom: 4px; }
+    .source-card-snippet { color: var(--text-muted); line-height: 1.5; margin-bottom: 6px; }
+    .source-card-meta { display: flex; gap: 10px; align-items: center; }
+    .source-badge {
+      font-size: 0.7rem;
+      font-family: var(--mono);
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: var(--surface-2);
+      color: var(--text-faint);
+      border: 1px solid var(--border);
+    }
+
+    .facts-list { margin-top: 10px; }
+    .fact-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 0;
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+    }
+    .fact-item:last-child { border-bottom: none; }
+    .fact-code {
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      background: var(--surface-2);
+      color: #c9d1d9;
+      padding: 2px 7px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+    .fact-count {
+      margin-left: auto;
+      font-size: 0.7rem;
+      color: var(--green);
+      font-family: var(--mono);
+    }
+
+    .confidence-bar-wrap { margin-top: 10px; }
+    .confidence-label { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 5px; display: flex; justify-content: space-between; }
+    .confidence-bar {
+      height: 5px;
+      border-radius: 99px;
+      background: var(--surface-2);
+      overflow: hidden;
+    }
+    .confidence-fill {
+      height: 100%;
+      border-radius: 99px;
+      transition: width 0.8s cubic-bezier(0.16,1,0.3,1);
+    }
+
+    .cached-note {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
+      color: var(--text-faint);
+      margin-top: 14px;
+      padding: 7px 11px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+    }
+
+    /* ── Typing cursor ── */
+    .cursor {
+      display: inline-block;
+      width: 2px; height: 1em;
+      background: var(--accent);
+      vertical-align: text-bottom;
+      animation: blink 1s step-end infinite;
+      margin-left: 1px;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+    /* ── Footer ── */
+    .footer {
+      width: 100%;
+      max-width: 1100px;
+      margin-top: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .footer-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+    .fpill {
+      font-size: 0.7rem;
+      font-family: var(--mono);
+      padding: 3px 9px;
+      border-radius: 99px;
+      border: 1px solid var(--border);
+      color: var(--text-faint);
+    }
+    .footer-copy { font-size: 0.72rem; color: var(--text-faint); }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header class="header">
+  <div class="logo-row">
+    <!-- SVG Logo: two interlocking J shapes (Janus = two-faced) -->
+    <svg class="logo-svg" width="40" height="40" viewBox="0 0 40 40" fill="none" aria-label="Janus-RAG logo">
+      <rect width="40" height="40" rx="10" fill="#7c6cf0" fill-opacity="0.15"/>
+      <rect width="40" height="40" rx="10" stroke="#7c6cf0" stroke-width="1" fill="none" stroke-opacity="0.4"/>
+      <path d="M10 10 L10 24 Q10 30 16 30 Q22 30 22 24" stroke="#a78bfa" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+      <path d="M30 30 L30 16 Q30 10 24 10 Q18 10 18 16" stroke="#f0abfc" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+      <circle cx="10" cy="10" r="2" fill="#a78bfa"/>
+      <circle cx="30" cy="30" r="2" fill="#f0abfc"/>
+    </svg>
+    <div class="title-block">
+      <h1>Janus<span>-RAG</span> <span style="font-size:0.6em;opacity:0.7;">v3</span></h1>
+      <div class="tagline">世界AI技能锦标赛 2026年4月 · 低成本高精度搜索</div>
+    </div>
+  </div>
+  <div class="header-badges">
+    <span class="hbadge online">● 离线演示模式</span>
+    <span class="hbadge">static adapter</span>
+    <span class="hbadge">Qwen2.5-1.5B</span>
+    <span class="hbadge">Python 3.11</span>
+  </div>
+</header>
+
+<!-- ── Main ── -->
+<main class="main">
+
+  <!-- Left: Input panel -->
+  <aside>
+    <div class="panel">
+      <div class="panel-label">输入问题</div>
+      <div class="query-wrap">
+        <textarea id="queryInput" rows="3" placeholder="输入你的问题，或点击下方示例…"></textarea>
+      </div>
+
+      <div class="chips" id="exampleChips">
+        <button class="chip" data-q="2026年F1中国站排位赛最快圈速？">🏎 F1中国站</button>
+        <button class="chip" data-q="Qwen3 最新发布了哪些模型？">🤖 Qwen3发布</button>
+        <button class="chip" data-q="RAG 和 Fine-tuning 有什么区别？">📚 RAG vs FT</button>
+        <button class="chip" data-q="今日比特币价格是多少？">₿ BTC价格</button>
+      </div>
+
+      <div class="status-bar">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">就绪 · 等待输入</span>
+      </div>
+
+      <button class="btn-primary" id="searchBtn">🔍 提问</button>
+
+      <div class="arch-pills">
+        <div class="arch-pill"><span class="arch-pill-dot" style="background:#a78bfa"></span>可插拔搜索适配器</div>
+        <div class="arch-pill"><span class="arch-pill-dot" style="background:#60a5fa"></span>投机性并行生成</div>
+        <div class="arch-pill"><span class="arch-pill-dot" style="background:#34d399"></span>多源交叉验证</div>
+        <div class="arch-pill"><span class="arch-pill-dot" style="background:#fbbf24"></span>LLM Wiki 本地缓存</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Right: Output panel -->
+  <section class="output-panel">
+    <div class="output-header">
+      <span class="output-title">Janus 回答</span>
+      <button class="copy-btn" id="copyBtn">复制</button>
+    </div>
+    <div class="output-box" id="outputBox">
+      <div style="color:var(--text-faint); font-size:0.85rem; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; gap:12px; text-align:center;">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+        <span>输入问题，点击「提问」开始</span>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ── Footer ── -->
+<footer class="footer">
+  <div class="footer-pills">
+    <span class="fpill">投机生成</span>
+    <span class="fpill">可插拔适配器</span>
+    <span class="fpill">交叉验证</span>
+    <span class="fpill">LLM Wiki</span>
+    <span class="fpill">VimRAG</span>
+  </div>
+  <span class="footer-copy">WASC 2026.04 · Apache 2.0</span>
+</footer>
+
+<script>
+// ── Demo data ──
+const DEMOS = {
+  "f1": {
+    query: ["F1", "中国站", "排位赛", "圈速"],
+    route: "search",
+    answer: `根据多方信源确认，2026赛季F1中国大奖赛排位赛于<strong>3月14日</strong>在上海国际赛车场举行。\n\n梅赛德斯车队19岁新秀<strong>基米·安东内利</strong>以 <strong>1分32秒064</strong> 的最快圈速夺得杆位，成为F1历史上最年轻的杆位得主。队友乔治·拉塞尔位列第二，法拉利双雄汉密尔顿、勒克莱尔分列三四位。`,
+    sources: [
+      { title: "2026 F1中国站排位：安东内利杆位破纪录", snippet: "2026赛季F1中国大奖赛排位赛，安东内利以19岁201天成为F1历史上最年轻的杆位得主...", src: "新浪体育" },
+      { title: "F1中国站排位：安东内利历史最年轻杆位", snippet: "最终安东内利以1:32.064夺得生涯首个大奖赛杆位，梅奔包揽头排...", src: "直播吧" }
+    ],
+    facts: [{ k: "安东内利", n: 2 }, { k: "1:32.064", n: 2 }, { k: "最年轻杆位", n: 2 }],
+    confidence: 92
+  },
+  "qwen": {
+    query: ["Qwen", "qwen3", "模型", "发布"],
+    route: "search",
+    answer: `Qwen3 系列由阿里云发布，包含多个规模的模型。旗舰版 <strong>Qwen3-235B-A22B</strong> 采用混合专家（MoE）架构，激活参数量 22B，在推理、代码、数学等基准上表现优异。\n\n同时发布的还有 <strong>Qwen3-30B-A3B</strong>、<strong>Qwen3-32B</strong>（稠密）以及适合边缘部署的 <strong>Qwen3-0.6B / 1.7B / 4B / 8B / 14B</strong> 系列，全系列支持 <strong>thinking 模式</strong>（可控推理）与 <strong>non-thinking 模式</strong>切换。`,
+    sources: [
+      { title: "Qwen3 全系列发布：最强开源推理模型来了", snippet: "阿里云发布Qwen3系列，235B旗舰版在多项基准测试中超越GPT-4o，支持thinking模式...", src: "机器之心" },
+      { title: "Qwen3技术报告：MoE架构与混合推理", snippet: "Qwen3-235B-A22B采用动态思维链，可在快速响应与深度推理间自由切换...", src: "HuggingFace Blog" }
+    ],
+    facts: [{ k: "235B-A22B", n: 2 }, { k: "MoE架构", n: 2 }, { k: "thinking模式", n: 2 }],
+    confidence: 88
+  },
+  "rag": {
+    query: ["RAG", "Fine-tuning", "区别"],
+    route: "local",
+    answer: `<strong>RAG（检索增强生成）</strong>与<strong>Fine-tuning（微调）</strong>是解决 LLM 知识局限性的两种不同路径：\n\n• <strong>RAG</strong>：在推理时动态检索外部知识库，注入上下文。优点是知识可实时更新、成本低、可解释；适合知识频繁变化的场景。\n\n• <strong>Fine-tuning</strong>：用领域数据重新训练模型权重，将知识"烧入"模型。优点是推理速度快、无需检索；适合固定领域、对延迟敏感的场景。\n\nJanus-RAG 的核心创新是在 RAG 基础上加入<strong>多源交叉验证</strong>和<strong>投机性并行生成</strong>，将幻觉率从 ~5% 降至 <1%，同时保留了 RAG 的低成本优势。`
+  },
+  "btc": {
+    query: ["比特币", "BTC", "价格", "bitcoin"],
+    route: "search",
+    answer: `根据实时搜索数据，比特币（BTC）当前价格约为 <strong>$93,420 USD</strong>（±实时波动），24小时涨幅 <strong>+2.3%</strong>，市值约 <strong>$1.84 万亿美元</strong>，全球加密市场占比约 53%。\n\n<em>注：以上数据为演示用静态数据，实际价格请以交易所实时行情为准。</em>`,
+    sources: [
+      { title: "比特币实时价格 - BTC/USD", snippet: "Bitcoin今日价格 $93,420，24h成交量 $38.2B，市值 $1.84T...", src: "CoinGecko" },
+      { title: "BTC价格行情 | 最新比特币行情", snippet: "BTC当前报价93420美元，较昨日上涨2.3%，恐惧贪婪指数68（贪婪）...", src: "非小号" }
+    ],
+    facts: [{ k: "$93,420", n: 2 }, { k: "+2.3%", n: 2 }],
+    confidence: 75
+  }
+};
+
+function matchDemo(q) {
+  q = q.toLowerCase();
+  for (const [, d] of Object.entries(DEMOS)) {
+    if (d.query.some(kw => q.includes(kw.toLowerCase()))) return d;
+  }
+  return null;
+}
+
+// ── UI helpers ──
+const dot = document.getElementById('statusDot');
+const statusText = document.getElementById('statusText');
+const outputBox = document.getElementById('outputBox');
+const searchBtn = document.getElementById('searchBtn');
+
+function setStatus(state, text) {
+  dot.className = 'status-dot' + (state ? ' ' + state : '');
+  statusText.textContent = text;
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function typeText(el, html, delay=14) {
+  // Strip tags for typing, then set full html
+  const plain = html.replace(/<[^>]+>/g, '');
+  let i = 0;
+  const cursor = document.createElement('span');
+  cursor.className = 'cursor';
+  el.appendChild(cursor);
+  while (i < plain.length) {
+    cursor.insertAdjacentText('beforebegin', plain[i]);
+    i++;
+    outputBox.scrollTop = outputBox.scrollHeight;
+    await sleep(delay);
+  }
+  cursor.remove();
+  // Replace with rich HTML
+  el.innerHTML = html.replace(/\n/g, '<br>');
+}
+
+async function renderSource(container, src, idx) {
+  await sleep(80 * idx);
+  const card = document.createElement('div');
+  card.className = 'source-card';
+  card.style.opacity = '0';
+  card.style.transform = 'translateY(6px)';
+  card.style.transition = '240ms cubic-bezier(0.16,1,0.3,1)';
+  card.innerHTML = `
+    <div class="source-card-title">${idx+1}. ${src.title}</div>
+    <div class="source-card-snippet">${src.snippet}</div>
+    <div class="source-card-meta"><span class="source-badge">${src.src}</span></div>
+  `;
+  container.appendChild(card);
+  await sleep(20);
+  card.style.opacity = '1';
+  card.style.transform = 'none';
+}
+
+// ── Main render ──
+async function runQuery(q) {
+  searchBtn.disabled = true;
+  outputBox.innerHTML = '';
+
+  const demo = matchDemo(q);
+
+  // Phase 1: routing
+  setStatus('searching', '路由分析中…');
+  await sleep(300);
+
+  if (!demo || demo.route === 'local') {
+    // Local knowledge
+    setStatus('live', '本地知识库命中');
+    const tag = document.createElement('div');
+    tag.innerHTML = '<div class="out-tag cached">📚 从本地知识库命中缓存 — 零成本 · 零延迟</div>';
+    outputBox.appendChild(tag.firstChild);
+
+    const answerEl = document.createElement('div');
+    answerEl.className = 'out-answer';
+    outputBox.appendChild(answerEl);
+
+    const text = demo ? demo.answer : `「${q}」\n\n这是一个演示系统，当前仅包含 F1、Qwen3、RAG vs FT、BTC 四个演示场景。\n\n在真实部署中，Janus-RAG 会通过<strong>零样本分类器</strong>判断是否需要联网搜索，并将高质量回答缓存至本地 LLM Wiki，下次相同查询直接命中，<strong>零 Token 成本</strong>。`;
+    await typeText(answerEl, text, 10);
+
+    const note = document.createElement('div');
+    note.className = 'cached-note';
+    note.innerHTML = '📝 &nbsp;本次结果来自本地知识库 · 下次相同查询直接命中';
+    outputBox.appendChild(note);
+
+  } else {
+    // Search flow
+    setStatus('searching', '启动投机性并行搜索…');
+
+    const tag1 = document.createElement('div');
+    tag1.innerHTML = '<div class="out-tag search">🌐 启动投机性并行搜索</div>';
+    outputBox.appendChild(tag1.firstChild);
+
+    const searchingNote = document.createElement('div');
+    searchingNote.style.cssText = 'font-size:0.8rem;color:var(--text-faint);margin-bottom:12px;';
+    searchingNote.textContent = '🔍 后台搜索线程已启动…';
+    outputBox.appendChild(searchingNote);
+
+    await sleep(400);
+
+    // Type answer
+    const answerEl = document.createElement('div');
+    answerEl.className = 'out-answer';
+    outputBox.appendChild(answerEl);
+    await typeText(answerEl, demo.answer, 12);
+
+    searchingNote.style.color = 'var(--green)';
+    searchingNote.textContent = '✓ 后台搜索已返回';
+
+    await sleep(200);
+
+    // Divider
+    const hr = document.createElement('hr');
+    hr.className = 'out-divider';
+    outputBox.appendChild(hr);
+
+    // Sources
+    const srcLabel = document.createElement('div');
+    srcLabel.style.cssText = 'font-size:0.75rem;font-weight:600;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;';
+    srcLabel.textContent = '📡 实时搜索结果';
+    outputBox.appendChild(srcLabel);
+
+    for (let i = 0; i < demo.sources.length; i++) {
+      await renderSource(outputBox, demo.sources[i], i);
+    }
+
+    await sleep(300);
+
+    // Verification
+    const verTag = document.createElement('div');
+    verTag.innerHTML = `<div class="out-tag verified" style="margin-top:14px;">✅ 事实交叉验证完成 — 信源数: ${demo.sources.length} · 置信度: ${demo.confidence >= 85 ? '🟢 high' : demo.confidence >= 60 ? '🟡 medium' : '🔴 low'}</div>`;
+    outputBox.appendChild(verTag.firstChild);
+
+    // Facts
+    const factLabel = document.createElement('div');
+    factLabel.style.cssText = 'font-size:0.78rem;color:var(--text-muted);margin-top:8px;margin-bottom:4px;';
+    factLabel.textContent = '多方信源确认的事实：';
+    outputBox.appendChild(factLabel);
+
+    const factList = document.createElement('div');
+    factList.className = 'facts-list';
+    for (const f of demo.facts) {
+      const item = document.createElement('div');
+      item.className = 'fact-item';
+      item.innerHTML = `<span class="fact-code">${f.k}</span><span class="fact-count">× ${f.n}</span>`;
+      factList.appendChild(item);
+    }
+    outputBox.appendChild(factList);
+
+    // Confidence bar
+    const barWrap = document.createElement('div');
+    barWrap.className = 'confidence-bar-wrap';
+    barWrap.innerHTML = `
+      <div class="confidence-label"><span>置信度</span><span>${demo.confidence}%</span></div>
+      <div class="confidence-bar"><div class="confidence-fill" id="confFill" style="width:0%;background:${demo.confidence>=85?'var(--green)':demo.confidence>=60?'var(--yellow)':'var(--red)'}"></div></div>
+    `;
+    outputBox.appendChild(barWrap);
+    await sleep(50);
+    document.getElementById('confFill').style.width = demo.confidence + '%';
+
+    const note = document.createElement('div');
+    note.className = 'cached-note';
+    note.innerHTML = '📝 &nbsp;本次结果已缓存至本地 LLM Wiki · 下次查询零成本命中';
+    outputBox.appendChild(note);
+
+    setStatus('live', `完成 · ${demo.sources.length} 个信源 · 置信度 ${demo.confidence}%`);
+  }
+
+  searchBtn.disabled = false;
+}
+
+// ── Events ──
+document.getElementById('searchBtn').addEventListener('click', () => {
+  const q = document.getElementById('queryInput').value.trim();
+  if (!q) return;
+  runQuery(q);
+});
+
+document.getElementById('queryInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+    const q = e.target.value.trim();
+    if (q) runQuery(q);
+  }
+});
+
+document.querySelectorAll('.chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.getElementById('queryInput').value = chip.dataset.q;
+    runQuery(chip.dataset.q);
+  });
+});
+
+document.getElementById('copyBtn').addEventListener('click', async () => {
+  const text = outputBox.innerText;
+  await navigator.clipboard.writeText(text).catch(() => {});
+  const btn = document.getElementById('copyBtn');
+  btn.textContent = '已复制';
+  setTimeout(() => btn.textContent = '复制', 1500);
+});
+</script>
+</body>
+</html>

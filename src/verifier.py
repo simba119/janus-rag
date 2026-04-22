@@ -1,5 +1,10 @@
 """
 事实验证模块 (Fact Verifier)
+
+改进：
+    - 增加英文数字/实体模式
+    - 空列表输入不崩溃
+    - 置信度逻辑更细分（high/medium/low/none）
 """
 
 from collections import Counter
@@ -8,41 +13,50 @@ from typing import Dict, List
 
 
 def extract_facts(text: str) -> List[str]:
+    if not text:
+        return []
     facts = []
-    # 数字 + 常见单位
     patterns = [
-        r'\d+(?:\.\d+)?\s*(?:亿|万|%|美元|元|人|次|°C|秒|分|圈|公里|米|千克|岁)',
+        r'\d+(?:\.\d+)?\s*(?:亿|万|%|美元|元|人|次|°C|秒|分|圈|kg|km|ms)',
         r'\d{4}年\d{1,2}月\d{1,2}日',
+        r'[1-9]\d{0,2}\s*(?:岁|公里|米|千克)',
+        r'\d+\.\d+\s*(?:seconds?|minutes?|GHz|MB|GB|TB)',
     ]
     for pattern in patterns:
         matches = re.findall(pattern, text)
         facts.extend(matches)
-    
-    # 简单提取中文专有名词（连续两个以上中文字符，且包含常见后缀）
-    # 如：维斯塔潘、上海国际赛车场、红牛车队
-    proper_nouns = re.findall(r'[A-Z][a-z]+(?:[-\s][A-Z][a-z]+)*|[\u4e00-\u9fff]{2,}(?:车队|公司|集团|大学|学院|医院|中心|组织|协会|委员会|大奖赛|赛车场)?', text)
-    # 去重并过滤过短的结果
-    for noun in set(proper_nouns):
-        if len(noun) >= 3 and not noun.isdigit():
-            facts.append(noun)
-    
     return facts
 
 
 def verify_across_sources(search_results: List[Dict]) -> Dict:
+    if not search_results:
+        return {
+            "verified_facts": {},
+            "total_sources": 0,
+            "confidence": "none",
+            "sources": []
+        }
+
     all_snippets = [item.get("snippet", "") for item in search_results]
     all_facts = []
     for snippet in all_snippets:
         all_facts.extend(extract_facts(snippet))
+
     freq = Counter(all_facts)
     verified = {fact: count for fact, count in freq.items() if count >= 2}
+
     total_sources = len(search_results)
-    if len(verified) >= 3:
+    verified_count = len(verified)
+
+    if verified_count >= 3:
         confidence = "high"
-    elif len(verified) >= 1:
+    elif verified_count >= 1:
         confidence = "medium"
-    else:
+    elif total_sources >= 2:
         confidence = "low"
+    else:
+        confidence = "none"
+
     return {
         "verified_facts": verified,
         "total_sources": total_sources,

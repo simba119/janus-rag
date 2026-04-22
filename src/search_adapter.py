@@ -6,8 +6,9 @@
     即可将自己的数据源无缝接入 Janus-RAG。
 
 内置适配器：
-    - BochaAdapter      : 博查 Web Search API（默认，国内合规，免费额度）
-    - OpenCLIAdapter    : 复用浏览器登录态，零成本抓取国内主流平台
+    - BochaAdapter         : 博查 Web Search API（默认，国内合规，免费额度）
+    - OpenCLIAdapter       : 复用浏览器登录态，零成本抓取国内主流平台
+    - AgentReachAdapter    : 基于 MCP 协议的跨平台 Agent 搜索（预留接口）
     - StaticOfflineAdapter : 离线演示/测试用，从本地 JSON 读取
 
 自定义适配器：
@@ -26,11 +27,11 @@ import os
 
 class BaseSearchAdapter(ABC):
     """搜索适配器抽象基类"""
-    
+
     @abstractmethod
     def search_sync(self, query: str, max_results: int = 5) -> List[Dict[str, str]]:
         """同步搜索，返回标准化结果列表。
-        
+
         每个结果必须包含字段:
             - title   : 标题
             - link    : 原始链接
@@ -38,12 +39,12 @@ class BaseSearchAdapter(ABC):
             - source  : 来源平台名称
         """
         pass
-    
+
     @abstractmethod
     async def search_async(self, query: str, max_results: int = 5) -> List[Dict[str, str]]:
         """异步搜索接口"""
         pass
-    
+
     @abstractmethod
     def is_available(self) -> bool:
         """检查适配器是否可用"""
@@ -52,24 +53,23 @@ class BaseSearchAdapter(ABC):
 
 # ============================================================================
 # 适配器 0: 博查 Web Search API (默认推荐)
-# 正确端点为 /v1/web-search，非 /v1/ai-search
 # ============================================================================
 
 class BochaAdapter(BaseSearchAdapter):
     """使用博查 Web Search API。
-    
+
     获取 API Key:
         1. 访问 https://open.bochaai.com 注册
         2. 在控制台获取 API Key
         3. 新用户有 1000 次免费调用额度
     """
-    
+
     def __init__(self, api_key: str = None):
         from config import config
         self.api_key = api_key or config.BOCHA_API_KEY
         self.base_url = "https://api.bocha.cn/v1/web-search"
         self._available = None
-        
+
     def is_available(self) -> bool:
         if self._available is None:
             if not self.api_key:
@@ -87,7 +87,7 @@ class BochaAdapter(BaseSearchAdapter):
                 except:
                     self._available = False
         return self._available
-    
+
     def search_sync(self, query: str, max_results: int = 5) -> List[Dict[str, str]]:
         if not self.is_available():
             return []
@@ -107,7 +107,7 @@ class BochaAdapter(BaseSearchAdapter):
             return self._parse_response(data)
         except:
             return []
-    
+
     async def search_async(self, query: str, max_results: int = 5) -> List[Dict[str, str]]:
         if not self.is_available():
             return []
@@ -121,10 +121,9 @@ class BochaAdapter(BaseSearchAdapter):
                     return self._parse_response(data)
         except:
             return []
-    
+
     def _parse_response(self, data: dict) -> List[Dict[str, str]]:
         results = []
-        # 正确路径：data.webPages.value
         web_pages = data.get("data", {}).get("webPages", {}).get("value", [])
         for item in web_pages:
             results.append({
@@ -137,18 +136,27 @@ class BochaAdapter(BaseSearchAdapter):
 
 
 # ============================================================================
-# 适配器 1: OpenCLI
+# 适配器 1: OpenCLI (https://github.com/jackwener/OpenCLI)
+# 安装: npm install -g @jackwener/opencli
 # ============================================================================
 
 class OpenCLIAdapter(BaseSearchAdapter):
-    """使用 OpenCLI 命令行工具抓取数据。"""
-    
+    """使用 OpenCLI 命令行工具抓取数据。
+
+    OpenCLI 把知乎、B站、小红书等平台统一封装成 CLI 接口，
+    复用浏览器登录态，零 Token 成本抓取内容。
+
+    安装方式:
+        npm install -g @jackwener/opencli
+        opencli doctor  # 验证环境
+    """
+
     def __init__(self, binary_path: str = None):
         from config import config
         self.binary = binary_path or config.OPENCLI_BINARY
         self._available = None
         self.platforms = ["zhihu", "bilibili"]
-        
+
     def is_available(self) -> bool:
         if self._available is None:
             try:
@@ -157,7 +165,7 @@ class OpenCLIAdapter(BaseSearchAdapter):
             except (subprocess.SubprocessError, FileNotFoundError):
                 self._available = False
         return self._available
-    
+
     def search_sync(self, query: str, max_results: int = 5) -> List[Dict[str, str]]:
         if not self.is_available():
             return []
@@ -172,20 +180,23 @@ class OpenCLIAdapter(BaseSearchAdapter):
             except subprocess.TimeoutExpired:
                 continue
         return all_results
-    
+
     async def search_async(self, query: str, max_results: int = 5) -> List[Dict[str, str]]:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.search_sync, query, max_results)
-    
+
     def _parse_output(self, raw_output: str, source: str) -> List[Dict[str, str]]:
         try:
             data = json.loads(raw_output)
+            # OpenCLI 顶层输出为数组，兼容带 items 包装的格式
+            items = data if isinstance(data, list) else data.get("items", [])
             results = []
-            for item in data.get("items", []):
+            for item in items:
                 results.append({
                     "title": item.get("title", ""),
                     "link": item.get("url", ""),
-                    "snippet": item.get("description", item.get("content", ""))[:500],
+                    # OpenCLI 用 excerpt，兜底兼容 description / content
+                    "snippet": item.get("excerpt", item.get("description", item.get("content", "")))[:500],
                     "source": source.capitalize()
                 })
             return results
@@ -194,39 +205,81 @@ class OpenCLIAdapter(BaseSearchAdapter):
 
 
 # ============================================================================
-# 适配器 2: 静态离线适配器（修复匹配逻辑）
+# 适配器 2: Agent-Reach（预留接口，MCP 协议）
+# ============================================================================
+
+class AgentReachAdapter(BaseSearchAdapter):
+    """基于 MCP 协议的跨平台 Agent 搜索（预留接口）。
+
+    需要自建 Agent-Reach 服务并在 .env 中配置 AGENT_REACH_ENDPOINT。
+    """
+
+    def __init__(self):
+        from config import config
+        self.endpoint = config.AGENT_REACH_ENDPOINT
+        self._available = None
+
+    def is_available(self) -> bool:
+        if self._available is None:
+            try:
+                import requests
+                resp = requests.get(f"{self.endpoint}/health", timeout=3)
+                self._available = (resp.status_code == 200)
+            except:
+                self._available = False
+        return self._available
+
+    def search_sync(self, query: str, max_results: int = 5) -> List[Dict[str, str]]:
+        if not self.is_available():
+            return []
+        try:
+            import requests
+            resp = requests.post(
+                f"{self.endpoint}/search",
+                json={"query": query, "max_results": max_results},
+                timeout=10
+            )
+            return resp.json().get("results", [])
+        except:
+            return []
+
+    async def search_async(self, query: str, max_results: int = 5) -> List[Dict[str, str]]:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.search_sync, query, max_results)
+
+
+# ============================================================================
+# 适配器 3: 静态离线适配器
 # ============================================================================
 
 class StaticOfflineAdapter(BaseSearchAdapter):
-    """从本地 JSON 文件读取预设结果。"""
-    
+    """从本地 JSON 文件读取预设结果，用于离线演示和测试。"""
+
     def __init__(self, data_file: str = "demo/offline_results.json"):
         self.data_file = data_file
         self._cache = None
-        
+
     def _load_cache(self):
         if self._cache is None:
             try:
-                with open(self.data_file, 'r', encoding='utf-8') as f:
+                with open(self.data_file, \'r\', encoding=\'utf-8\') as f:
                     self._cache = json.load(f)
             except FileNotFoundError:
                 self._cache = {}
         return self._cache
-    
+
     def is_available(self) -> bool:
         return True
-    
+
     def search_sync(self, query: str, max_results: int = 5) -> List[Dict[str, str]]:
         cache = self._load_cache()
-        # 1. 精确关键词匹配（跳过元数据字段）
         for key, results in cache.items():
             if key.startswith("_"):
                 continue
             if key.lower() in query.lower():
                 return results[:max_results]
-        # 2. 无匹配时返回 default 兜底数据
         return cache.get("default", [])[:max_results]
-    
+
     async def search_async(self, query: str, max_results: int = 5) -> List[Dict[str, str]]:
         return self.search_sync(query, max_results)
 
@@ -238,13 +291,15 @@ class StaticOfflineAdapter(BaseSearchAdapter):
 def get_search_adapter() -> BaseSearchAdapter:
     """根据配置返回当前激活的搜索适配器实例"""
     from config import config
-    
+
     adapter_name = config.SEARCH_ADAPTER.lower()
-    
+
     if adapter_name == "bocha":
         return BochaAdapter()
     elif adapter_name == "opencli":
         return OpenCLIAdapter()
+    elif adapter_name == "agent_reach":
+        return AgentReachAdapter()
     elif adapter_name == "static":
         return StaticOfflineAdapter()
     else:
@@ -255,4 +310,12 @@ def get_search_adapter() -> BaseSearchAdapter:
             adapter_class = getattr(module, class_name)
             return adapter_class()
         except Exception as e:
-            raise ValueError(f"无法加载搜索适配器 '{adapter_name}': {e}")
+            raise ValueError(f"无法加载搜索适配器 \'{adapter_name}\': {e}")
+'''
+
+path = os.path.expanduser("~/output/search_adapter.py")
+os.makedirs(os.path.dirname(path), exist_ok=True)
+with open(path, 'w', encoding='utf-8') as f:
+    f.write(content)
+
+print("写入成功:", os.path.getsize(path), "bytes")
